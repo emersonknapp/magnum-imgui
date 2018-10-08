@@ -20,7 +20,6 @@
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "MagnumImGui.h"
-
 #include <Corrade/Utility/Resource.h>
 
 #include <Magnum/GL/Context.h>
@@ -34,8 +33,21 @@
 #include <Magnum/GL/Extensions.h>
 
 #include <imgui.h>
+#include "examples/imgui_impl_opengl3.h"
 
 using namespace Magnum;
+
+MagnumImGui::MagnumImGui() {
+  init();
+  load();
+  const char* glsl_version = "#version 330";
+  ImGui_ImplOpenGL3_Init(glsl_version);
+}
+
+MagnumImGui::~MagnumImGui() {
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui::DestroyContext();
+}
 
 void MagnumImGui::init() {
   ImGui::CreateContext();
@@ -62,34 +74,12 @@ void MagnumImGui::init() {
 
   //   io.SetClipboardTextFn = ;
   //   io.GetClipboardTextFn = ;
+  ImGui::StyleColorsDark();
 
   mTimeline.start();
 }
 
 void MagnumImGui::load() {
-  ImGuiIO &      io = ImGui::GetIO();
-  unsigned char *pixels;
-  int            width, height;
-  int            pixel_size;
-  io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &pixel_size);
-
-  ImageView2D image{ GL::PixelFormat::RGBA,
-					GL::PixelType::UnsignedByte,
-                    {width, height},
-                    {pixels, std::size_t(pixel_size * width * height)}};
-
-  mTexture.setMagnificationFilter(GL::SamplerFilter::Linear)
-      .setMinificationFilter(GL::SamplerFilter::Linear)
-      .setStorage(0, GL::TextureFormat::RGBA, image.size())
-      .setImage(0, GL::TextureFormat::RGBA, image);
-
-  mMesh.setPrimitive(GL::MeshPrimitive::Triangles);
-  mMesh.addVertexBuffer(
-      mVertexBuffer, 0, ImguiShader::Position{},
-      ImguiShader::TextureCoordinates{},
-      ImguiShader::Color(ImguiShader::Color::Components::Four,
-                         ImguiShader::Color::DataType::UnsignedByte,
-                         ImguiShader::Color::DataOption::Normalized));
 }
 
 bool MagnumImGui::keyPressReleaseEvent(
@@ -197,12 +187,6 @@ bool MagnumImGui::mousePressReleaseEvent(
   return ImGui::GetIO().WantCaptureMouse;
 }
 
-MagnumImGui::MagnumImGui() {
-  init();
-  load();
-}
-
-MagnumImGui::~MagnumImGui() { ImGui::DestroyContext(); }
 
 void MagnumImGui::newFrame(const Vector2i &winSize,
                            const Vector2i &viewportSize) {
@@ -226,6 +210,7 @@ void MagnumImGui::newFrame(const Vector2i &winSize,
   io.MouseWheel = mMouseScroll;
   mMouseScroll  = 0.0f;
 
+  ImGui_ImplOpenGL3_NewFrame();
   ImGui::NewFrame();
 }
 
@@ -242,59 +227,7 @@ void MagnumImGui::drawFrame() {
   if (!draw_data)
     return;
 
-  draw_data->ScaleClipRects(io.DisplayFramebufferScale);
-
-  GL::Renderer::enable(GL::Renderer::Feature::Blending);
-  GL::Renderer::setBlendEquation(Magnum::GL::Renderer::BlendEquation::Add,
-                             Magnum::GL::Renderer::BlendEquation::Add);
-  GL::Renderer::setBlendFunction(GL::Renderer::BlendFunction::SourceAlpha,
-	  GL::Renderer::BlendFunction::OneMinusSourceAlpha);
-  GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
-  GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
-  GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
-
-  const Matrix4 ortho_projection{
-      {2.0f / io.DisplaySize.x, 0.0f, 0.0f, 0.0f},
-      {0.0f, 2.0f / -io.DisplaySize.y, 0.0f, 0.0f},
-      {0.0f, 0.0f, -1.0f, 0.0f},
-      {-1.0f, 1.0f, 0.0f, 1.0f},
-  };
-  mShader.setProjectMatrix(ortho_projection);
-  mShader.setTexture(mTexture);
-
-  for (int n = 0; n < draw_data->CmdListsCount; n++) {
-    const ImDrawList *cmd_list          = draw_data->CmdLists[n];
-    ImDrawIdx         idx_buffer_offset = 0;
-
-    mVertexBuffer.setData(
-        {cmd_list->VtxBuffer.Data, std::size_t(cmd_list->VtxBuffer.Size)},
-		GL::BufferUsage::StreamDraw);
-    mIndexBuffer.setData(
-        {cmd_list->IdxBuffer.Data, std::size_t(cmd_list->IdxBuffer.Size)},
-		GL::BufferUsage::StreamDraw);
-
-    for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
-      const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[cmd_i];
-
-      GL::Renderer::setScissor(
-          {{(int)pcmd->ClipRect.x, fb_height - (int)(pcmd->ClipRect.w)},
-           {(int)(pcmd->ClipRect.z), fb_height - (int)(pcmd->ClipRect.y)}});
-
-      mMesh.setCount(pcmd->ElemCount);
-      mMesh.setIndexBuffer(mIndexBuffer, idx_buffer_offset * sizeof(ImDrawIdx),
-                           sizeof(ImDrawIdx) == 2
-                               ? GL::MeshIndexType::UnsignedShort
-                               : GL::MeshIndexType::UnsignedInt);
-
-      idx_buffer_offset += pcmd->ElemCount;
-
-      mMesh.draw(mShader);
-    }
-  }
-
-  GL::Renderer::disable(GL::Renderer::Feature::ScissorTest);
-  GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-  GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+  ImGui_ImplOpenGL3_RenderDrawData(draw_data);
 }
 
 bool MagnumImGui::mousePressEvent(

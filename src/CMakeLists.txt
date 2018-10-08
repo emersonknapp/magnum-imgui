@@ -3,16 +3,25 @@ project(MagnumImGui CXX)
 # Build library
 find_package(Magnum REQUIRED
   Shaders
+  MeshTools
+  Primitives
   Sdl2Application)
 find_package(SDL2 REQUIRED)
-find_package(imgui REQUIRED)
 
-add_library(${PROJECT_NAME} MagnumImGui.cpp ${MagnumImGuiShaders_RCS})
+
+
+add_library(
+    ${PROJECT_NAME}
+    MagnumImGui.cpp
+    # imgui_impl_magnum_gl3.cpp
+    ../imgui/examples/imgui_impl_opengl3.cpp
+    ${MagnumImGuiShaders_RCS}
+)
 
 target_link_libraries(${PROJECT_NAME}
   Magnum::Application
   Magnum::GL
-  imgui::imgui
+  imgui
   )
 
 install(TARGETS ${PROJECT_NAME}
@@ -32,8 +41,10 @@ if(BUILD_EXAMPLE)
     Magnum::Application
     Magnum::Magnum
     Magnum::Shaders
+    Magnum::MeshTools
+    Magnum::Primitives
     ${PROJECT_NAME}
     SDL2::SDL2
-    imgui::imgui
+    imgui
     )
 endif()
